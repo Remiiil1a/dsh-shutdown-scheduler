@@ -1,0 +1,40 @@
+{
+  "name": "dsh-shutdown-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shutdown page in the Settings panel: delayed shutdown with a cancellable grace window, a wall-clock schedule, and shutdown after the task ends.",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    },
+    "manifestVersion": 1
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "locale/*.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,22 @@
+# Row this bundle inserts into the profile composition.
+#
+# `config` is the plugin's own tunable block; the values below are the
+# defaults, so deleting a line keeps that default.
+- insert:
+    - id: dsh-shutdown-scheduler
+      name: dsh-shutdown-scheduler
+      config:
+        # Seconds between issuing the shutdown command and the shutdown itself.
+        # The window is the cancellation window the Settings page counts down.
+        graceSeconds: 180
+        # Start in simulation mode: commands are recorded, never executed.
+        dryRun: false
+        # Executable overrides; empty uses the platform `shutdown`.
+        startBinary: ''
+        cancelBinary: ''
+        # argv overrides; null uses the platform defaults
+        # (win32: ["/s","/t","<grace>","/c",comment] and ["/a"]).
+        startArgs: null
+        cancelArgs: null
+        # Windows `/c` notice shown by the OS while the shutdown is pending.
+        comment: 'DeepSeek Harness scheduled shutdown. Run "shutdown /a" to cancel.'

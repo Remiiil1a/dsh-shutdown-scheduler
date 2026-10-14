@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Shutdown",
+    "description": "Adds a Shutdown page to the Settings panel: delayed shutdown with a cancellable countdown, a wall-clock schedule, and shutdown after the task ends."
+  }
+}

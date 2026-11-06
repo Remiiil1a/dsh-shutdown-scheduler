@@ -1,7 +1,22 @@
 # 关机（dsh-shutdown-scheduler）
 
-给 DeepSeek Harness 的 **设置面板** 加一个「关机」页。入口就是左下角侧边栏底部的设置按钮：
-打开设置后，左侧导航里会出现「关机」。
+给 DeepSeek Harness 加一个「关机」页，有**两个入口**，渲染的是同一套控件、同一份主机状态：
+
+- **侧边栏快捷入口**：左侧栏「插件 / 插件市场 / 自动化任务」那一组里多一行「关机」（电源图标）。
+  点一下就在中栏打开完整关机页，倒计时期间不用再翻设置。侧边栏收起成 56px 图标栏时只显示图标。
+- **设置面板**：左下角设置按钮 → 左侧导航里也有「关机」。
+
+## 侧边栏入口是怎么来的
+
+DSH 的侧边栏全局面板行由 `sidebar.panellist` 这个 list slot 提供，每行用 `id` 指向 `main`
+keyed slot 里同名的面板；两个注册都用同一个 id（`shutdown`）绑在一起，缺一个点上去就会抛错。
+本插件因此注册了三处：
+
+| 注册 | 作用 |
+| --- | --- |
+| `sidebar.panellist`（id `shutdown`、order 20） | 红色方框那一组里的一行「关机」 |
+| `main`（key `shutdown`） | 这一行打开的中栏页面，自带标题、说明与滚动容器 |
+| `settings.section`（id `shutdown`、order 90） | 设置面板里的关机页（原有入口，保留） |
 
 ## 功能
 
@@ -23,7 +38,7 @@
 - Linux / macOS：`shutdown -h +3`，取消用 `shutdown -c`
 
 好处是即使 DSH 进程在倒计时期间退出或崩溃，系统仍然会按时关机；取消也仍然有效。
-设置页底部会显示当前平台真实执行的命令，方便核对。
+页面底部会显示当前平台真实执行的命令，方便核对。
 
 ## 任务结束后关机的细节
 
@@ -34,7 +49,7 @@
 
 ## 安全演练
 
-设置页有一个「安全演练」开关：打开后只记录将要执行的命令，**不会真的关机**。
+两个入口里都有「安全演练」开关：打开后只记录将要执行的命令，**不会真的关机**。
 第一次配置定时关机时建议先打开它验证一遍。
 
 ## 配置
@@ -58,7 +73,7 @@
 
 ## HTTP 接口
 
-设置页通过一条同源、带 CSRF 防护的路由与主机通信，也可以自己调：
+两个入口都通过一条同源、带 CSRF 防护的路由与主机通信，也可以自己调：
 
 ```js
 fetch('/dsh-shutdown/api', {
@@ -79,20 +94,27 @@ fetch('/dsh-shutdown/api', {
 
 ## 生效时机
 
-- **浏览器侧**（设置页本身）：宿主服务按文件 mtime 提供新字节，刷新页面即可生效。
-- **主机侧**（命令与状态机）：已安装包换成新的 JavaScript 模块需要**重启 DSH**。
-  本插件是现场安装的，安装当时进程里跑的还只是旧的一代；DSH 重启后已加载磁盘上的最终版本，
-  `runningAgents` / `agentTransitions` / `lastAgentEventAt` 现在可以读到。
+本插件是 profile 里的 git 依赖（`github:Remiiil1a/dsh-shutdown-scheduler`），运行时读的是
+`profiles/<name>/node_modules/` 下的那份**拷贝**，不是源码工作区。所以：
+
+- **装上新版本**：升级这个依赖（重新按该仓库安装一次），`node_modules` 里的拷贝才会更新。
+- **浏览器侧**（侧边栏行 + 两个页面）：客户端模块由宿主按文件内容提供，装好后**刷新页面**即可看到新行。
+- **主机侧**（命令与状态机，本次未改）：`index.js` 的改动需要**重启 DSH** 才换到新模块。
 
 ## 验证状态
 
 | 项目 | 结果 |
 | --- | --- |
 | `index.js` / `client.js` 语法与括号平衡 | 通过（`node --check` + 括号扫描） |
-| 主机侧行为（26 项，独立测试脚本） | 全部通过 |
+| 主机侧行为（26 项，独立测试脚本） | 全部通过（本次改动未触及主机侧，回归仍全绿） |
 | 其中：真实子进程执行 + 真实取消失败上报 | 通过（用 `node -e process.exit(N)` 替身，未触发真实关机） |
-| 浏览器侧渲染（10 种主机状态，mini-React 冒烟脚本） | 全部通过，两个语言字典各 49 个键完全对齐 |
-| 运行中的 Harness 里实时注册 `settings.section` | 通过（`id=shutdown`、`order=90`、`active=true`） |
+| 浏览器侧渲染：设置页（11 种主机状态，mini-React 冒烟脚本） | 全部通过 |
+| 浏览器侧渲染：侧边栏快捷页（4 种状态 + 标题/说明） | 全部通过 |
+| 侧边栏行图标（16 / 18px 两个尺寸） | 通过（svg 尺寸跟随入参，两段路径） |
+| 两个语言字典 | 各 50 个键完全对齐 |
+| 三处注册的 id / key 绑定 | 通过（`sidebar.panellist.id` = `main.key` = `shutdown`、order 20、label「关机」） |
+| 运行中的 Harness 里实时注册 `settings.section` | 通过（`id=shutdown`、`order=90`、`active=true`；加行前的旧版本） |
+| 运行中的 Harness 里出现新的「关机」侧边栏行 | **待装新版本后人工确认**（见「生效时机」；本次只改工作区，未动已安装拷贝） |
 | 运行中的 Harness 里真实 HTTP 往返 | 通过（`arm` → 3:00 倒计时 → `cancel` → 空闲；`schedule(4s)` → 到点自动转为倒计时） |
 | 主机侧新模块重启后加载 | 通过（`runningAgents`、`agentTransitions` 已可读到） |
 | `agent/status` 在真实主机里收到事件 | 通过（重启后实测 `agentTransitions.running` 随真实任务启动递增） |
@@ -108,12 +130,12 @@ profile 自动加载，状态归零，没有遗留倒计时，也不会出现「
 ## 其余文件
 
 - `index.js` — 主机侧：命令、状态机、路由、`agent/status` 监听
-- `client.js` — 浏览器侧：`settings.section` 里的关机页
+- `client.js` — 浏览器侧：`sidebar.panellist` 行 + `main` 快捷页 + `settings.section` 页，三者共用同一套控件
 - `cordis.patch.yml` — 插入的插件行与默认配置
 - `locale/zh.json`、`locale/en.json` — 插件管理器里的标题与描述
 
 测试脚本不在包内，放在工作区的 `../_scratch/`：
-`host-behaviour.mjs`（主机侧 26 项）、`render-smoke.mjs`（浏览器侧渲染）、`balance.mjs`（括号平衡）。
+`host-behaviour.mjs`（主机侧 26 项）、`render-smoke.mjs`（三处注册的浏览器侧渲染）、`balance.mjs`（括号平衡）。
 
 ## 平台
 

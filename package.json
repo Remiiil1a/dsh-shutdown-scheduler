@@ -1,9 +1,9 @@
 {
   "name": "dsh-shutdown-scheduler",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Shutdown page in the Settings panel: delayed shutdown with a cancellable grace window, a wall-clock schedule, and shutdown after the task ends.",
+  "description": "Shutdown scheduler: a sidebar shortcut and a Settings page for delayed shutdown with a cancellable grace window, a wall-clock schedule, and shutdown after the task ends.",
   "icon": "./icon.svg",
   "exports": {
     ".": "./index.js",

@@ -1,11 +1,18 @@
 /**
  * Client half of `dsh-shutdown-scheduler`.
  *
- * Registers one page in the Settings panel — the seat reached from the
- * settings button at the bottom-left of the sidebar — and renders the
- * shutdown controls: the live countdown with its cancel button, an immediate
- * (delayed) shutdown, a wall-clock schedule, the shutdown-after-task-end
- * switch, and a simulation switch.
+ * Registers the shutdown controls in two seats:
+ *
+ *  - `settings.section` — the page reached from the settings button at the
+ *    bottom-left of the sidebar;
+ *  - `sidebar.panellist` + `main` — a global panel row in the sidebar (beside
+ *    Plugins and the automation list) that opens the same controls in the
+ *    centre column, so the countdown is one click away without opening
+ *    Settings.
+ *
+ * Both seats render the same control body: the live countdown with its cancel
+ * button, an immediate (delayed) shutdown, a wall-clock schedule, the
+ * shutdown-after-task-end switch, and a simulation switch.
  *
  * The host half owns every command; this file only renders its state and
  * posts one JSON envelope to `/dsh-shutdown/api`.
@@ -23,9 +30,12 @@ window.__ModuleLoader__.load({
 		const NS = 'dsh-shutdown-scheduler'
 		/** Settings section key. */
 		const SECTION_ID = 'shutdown'
+		/** Main-panel key; the sidebar row registers under the same id. */
+		const PANEL_ID = 'shutdown'
 
 		const ZH = {
 			nav: '关机',
+			pageIntro: '设定关机时刻、延时，或等任务结束后自动关机；倒计时期间可随时取消。',
 			loading: '正在读取关机状态…',
 			unreachable: '无法连接 Harness 主机：{message}',
 			retry: '重试',
@@ -78,6 +88,7 @@ window.__ModuleLoader__.load({
 
 		const EN = {
 			nav: 'Shutdown',
+			pageIntro: 'Pick a shutdown time, delay it, or let the machine shut down when the task ends. Cancel at any point during the countdown.',
 			loading: 'Reading shutdown status…',
 			unreachable: 'Cannot reach the Harness host: {message}',
 			retry: 'Retry',
@@ -130,6 +141,13 @@ window.__ModuleLoader__.load({
 
 		const CSS = [
 			'.dshsd-root{display:flex;flex-direction:column;width:100%}',
+			'.dshsd-page{box-sizing:border-box;height:100%;overflow:auto;padding:0 clamp(24px,4vw,48px) 48px}',
+			'.dshsd-page-inner{display:flex;flex-direction:column;max-width:720px;margin:0 auto}',
+			'.dshsd-page-head{padding-top:28px}',
+			'[data-platform=darwin] .dshsd-page-head{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}',
+			'.dshsd-page-title{margin:0;color:var(--dsw-alias-label-primary);font-size:20px;line-height:28px;font-weight:500}',
+			'.dshsd-page-intro{margin:4px 0 0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}',
+			'.dshsd-page-body{margin-top:8px}',
 			'.dshsd-row{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}',
 			'.dshsd-row:last-child{border-bottom:none}',
 			'.dshsd-col{flex:1;min-width:0}',
@@ -243,13 +261,14 @@ window.__ModuleLoader__.load({
 		}
 
 		/**
-		 * Build the settings page component over the plugin's locale binding.
+		 * Build the control body shared by the Settings page and the standalone
+		 * panel: one polling/action state machine, one element tree.
 		 * @param ctx - the client plugin context.
 		 * @param t - the locale-bound translate function.
-		 * @returns the React component registered into `settings.section`.
+		 * @returns the React component that renders the rows.
 		 */
-		function makeSection(ctx, t) {
-			return function ShutdownSection() {
+		function makeControls(ctx, t) {
+			return function ShutdownControls() {
 				const [state, setState] = React.useState(null)
 				const [error, setError] = React.useState(null)
 				const [busy, setBusy] = React.useState(false)
@@ -487,6 +506,80 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		/**
+		 * Build the Settings page: the shared controls, nothing else. The Settings
+		 * shell already draws the page title, so no heading is added here.
+		 * @param ctx - the client plugin context.
+		 * @param t - the locale-bound translate function.
+		 * @returns the React component registered into `settings.section`.
+		 */
+		function makeSection(ctx, t) {
+			const Controls = makeControls(ctx, t)
+			return function ShutdownSection() {
+				return h(Controls)
+			}
+		}
+
+		/**
+		 * Build the standalone page the sidebar row opens in the centre column.
+		 * The page owns its heading and scroll container because a `main`
+		 * occupant gets the raw column, and entry-style pages pad their head by
+		 * the frame's top clearance under the macOS traffic lights.
+		 * @param ctx - the client plugin context.
+		 * @param t - the locale-bound translate function.
+		 * @returns the React component registered into `main`.
+		 */
+		function makePage(ctx, t) {
+			const Controls = makeControls(ctx, t)
+			return function ShutdownPage() {
+				// The heading follows the active locale without a remount, the same
+				// way the Settings page does.
+				const [, setLocaleRevision] = React.useState(0)
+				React.useEffect(() => ctx.locale.subscribe(() => setLocaleRevision((value) => value + 1)), [ctx])
+				return h('section', { className: 'dshsd-page', 'aria-label': t('nav') }, [
+					h('div', { className: 'dshsd-page-inner', key: 'inner' }, [
+						h('header', { className: 'dshsd-page-head', key: 'head' }, [
+							h('h1', { className: 'dshsd-page-title', key: 'title' }, t('nav')),
+							h('p', { className: 'dshsd-page-intro', key: 'intro' }, t('pageIntro')),
+						]),
+						h('div', { className: 'dshsd-page-body', key: 'body' }, h(Controls)),
+					]),
+				])
+			}
+		}
+
+		/**
+		 * Sidebar row glyph, the same power mark as the bundle icon, drawn in the
+		 * sidebar's own text colour so it follows the theme and the active state.
+		 * @param props - the row's requested square edge in pixels.
+		 */
+		function ShutdownPanelIcon(props) {
+			const size = Number(props.size) > 0 ? Number(props.size) : 16
+			return h('svg', {
+				width: size,
+				height: size,
+				viewBox: '0 0 16 16',
+				fill: 'none',
+				'aria-hidden': 'true',
+				focusable: 'false',
+			}, [
+				h('path', {
+					key: 'stem',
+					d: 'M8 3.5v4',
+					stroke: 'currentColor',
+					strokeWidth: 1.25,
+					strokeLinecap: 'round',
+				}),
+				h('path', {
+					key: 'arc',
+					d: 'M9.75 5.22A3.5 3.5 0 1 1 6.25 5.22',
+					stroke: 'currentColor',
+					strokeWidth: 1.25,
+					strokeLinecap: 'round',
+				}),
+			])
+		}
+
 		/** `HH:MM` one minute from now, as the time input's initial value. */
 		function defaultClock() {
 			const when = new Date(Date.now() + 60000)
@@ -528,6 +621,21 @@ window.__ModuleLoader__.load({
 					order: 90,
 					label: () => t('nav'),
 				}, makeSection(ctx, t)))
+				// The standalone page: `main` keys the centre column, `sidebar.panellist`
+				// draws the row that selects it. One id ties the two registrations
+				// together; a missing main key would make the row throw on click.
+				ctx.slots.inject('main', () => ctx.slots.register({
+					name: 'main',
+					key: PANEL_ID,
+					locale: NS,
+				}, makePage(ctx, t)))
+				ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+					name: 'sidebar.panellist',
+					id: PANEL_ID,
+					order: 20,
+					locale: NS,
+					label: () => t('nav'),
+				}, ShutdownPanelIcon))
 			},
 		}
 	},
